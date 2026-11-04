@@ -6,6 +6,7 @@ PORT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 IMAGE_NAME="openwrt-tenda-builder"
 USER_ID="$(id -u)"
 GROUP_ID="$(id -g)"
+CACHE_VOLUME="openwrt-tenda-cache"
 
 echo "=========================================================="
 echo " Building Docker Build Container"
@@ -28,13 +29,17 @@ echo "=========================================================="
 docker run --rm -i \
     -v "${PORT_DIR}:/work:ro" \
     -v "${PORT_DIR}/bin:/output" \
+    -v "${CACHE_VOLUME}:/home/builduser" \
     "${IMAGE_NAME}" bash -c '
 set -euo pipefail
 BRANCH="openwrt-23.05"
 NPROC=$(nproc)
 
-echo "[1/6] Cloning OpenWrt ${BRANCH} into container workspace..."
-git clone --depth 1 -b "${BRANCH}" https://github.com/openwrt/openwrt.git openwrt
+if [ ! -d "openwrt/.git" ]; then
+    echo "[1/6] Cloning OpenWrt ${BRANCH}..."
+    git clone --depth 1 -b "${BRANCH}" https://github.com/openwrt/openwrt.git openwrt
+fi
+
 cd openwrt
 
 echo "[2/6] Updating and installing feeds..."
@@ -42,7 +47,7 @@ echo "[2/6] Updating and installing feeds..."
 ./scripts/feeds install -a
 
 echo "[3/6] Installing Tenda W15E v2.0 Device Tree and profile..."
-cp /work/dts/qca9531_tenda_w15e-v2.dts target/linux/ath79/dts/
+cp -v /work/dts/qca9531_tenda_w15e-v2.dts target/linux/ath79/dts/
 
 if ! grep -q "Device/tenda_w15e-v2" target/linux/ath79/image/generic.mk; then
     cat << "EOF" >> target/linux/ath79/image/generic.mk
@@ -76,7 +81,7 @@ EOF
 make defconfig
 
 echo "[5/6] Starting compilation with ${NPROC} parallel jobs..."
-make -j"${NPROC}"
+make -j"${NPROC}" || make -j1 V=s
 
 echo "[6/6] Copying compiled firmware binaries to output directory..."
 cp -v bin/targets/ath79/generic/*tenda_w15e-v2* /output/ || cp -v bin/targets/ath79/generic/*.bin /output/

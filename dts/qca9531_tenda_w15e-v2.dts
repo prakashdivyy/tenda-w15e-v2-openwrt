@@ -94,8 +94,7 @@
 
 &eth0 {
 	status = "okay";
-	phy-handle = <&phy0>;
-	phy-mode = "mii";
+	phy-handle = <&swphy4>;
 
 	nvmem-cells = <&macaddr_art_0>;
 	nvmem-cell-names = "mac-address";
@@ -103,11 +102,11 @@
 
 &eth1 {
 	status = "okay";
-	phy-handle = <&phy4>;
-	phy-mode = "mii";
+	phy-handle = <&swphy0>;
 
-	nvmem-cells = <&macaddr_art_6>;
+	nvmem-cells = <&macaddr_art_0>;
 	nvmem-cell-names = "mac-address";
+	mac-address-increment = <1>;
 };
 
 &wmac {
@@ -118,16 +117,18 @@
 	nvmem-cell-names = "mac-address";
 };
 
-&pcie {
+&pcie0 {
 	status = "okay";
 
 	wifi@0,0 {
 		compatible = "qcom,ath10k";
-		reg = <0x0000 0 0 0 0>;
+		reg = <0 0 0 0 0>;
 		mtd-cal-data = <&art 0x5000>;
+		device_type = "pci";
 
-		nvmem-cells = <&macaddr_art_6>;
+		nvmem-cells = <&macaddr_art_0>;
 		nvmem-cell-names = "mac-address";
+		mac-address-increment = <2>;
 	};
 };
 
@@ -138,9 +139,5 @@
 
 	macaddr_art_0: macaddr@0 {
 		reg = <0x0 0x6>;
-	};
-
-	macaddr_art_6: macaddr@6 {
-		reg = <0x6 0x6>;
 	};
 };
