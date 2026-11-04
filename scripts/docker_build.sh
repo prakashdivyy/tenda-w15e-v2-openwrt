@@ -33,7 +33,7 @@ set -euo pipefail
 BRANCH="openwrt-23.05"
 NPROC=$(nproc)
 
-echo "[1/6] Cloning OpenWrt ${BRANCH} into container RAM/disk..."
+echo "[1/6] Cloning OpenWrt ${BRANCH} into container workspace..."
 git clone --depth 1 -b "${BRANCH}" https://github.com/openwrt/openwrt.git openwrt
 cd openwrt
 
@@ -41,9 +41,25 @@ echo "[2/6] Updating and installing feeds..."
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
-echo "[3/6] Applying Tenda W15E v2.0 Device Tree and Makefile patch..."
+echo "[3/6] Installing Tenda W15E v2.0 Device Tree and profile..."
 cp /work/dts/qca9531_tenda_w15e-v2.dts target/linux/ath79/dts/
-git apply /work/patches/01-add-tenda-w15e-v2.patch
+
+if ! grep -q "Device/tenda_w15e-v2" target/linux/ath79/image/generic.mk; then
+    cat << "EOF" >> target/linux/ath79/image/generic.mk
+
+define Device/tenda_w15e-v2
+  SOC := qca9531
+  DEVICE_VENDOR := Tenda
+  DEVICE_MODEL := W15E
+  DEVICE_VARIANT := v2
+  DEVICE_PACKAGES := kmod-ath10k ath10k-firmware-qca9887
+  IMAGE_SIZE := 16064k
+  SUPPORTED_DEVICES += tenda,w15e-v2
+endef
+TARGET_DEVICES += tenda_w15e-v2
+EOF
+    echo "       Registered Device/tenda_w15e-v2 in generic.mk"
+fi
 
 echo "[4/6] Creating build configuration..."
 cat << EOF > .config
@@ -60,11 +76,14 @@ EOF
 make defconfig
 
 echo "[5/6] Starting compilation with ${NPROC} parallel jobs..."
-make -j"${NPROC}" || make -j1 V=s
+make -j"${NPROC}"
 
 echo "[6/6] Copying compiled firmware binaries to output directory..."
 cp -v bin/targets/ath79/generic/*tenda_w15e-v2* /output/ || cp -v bin/targets/ath79/generic/*.bin /output/
 
-echo "Build complete! Output files in /output:"
+echo ""
+echo "=========================================================="
+echo " Build Succeeded! Output firmware binaries:"
 ls -lh /output
+echo "=========================================================="
 '
