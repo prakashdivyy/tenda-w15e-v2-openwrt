@@ -8,30 +8,34 @@ This plan outlines the end-to-end steps required to port, compile, and flash **O
 
 ```mermaid
 flowchart TD
-    subgraph Phase 1: Hardware & Backup
-        A[Open Casing & Solder UART] --> B[Capture Boot Log in U-Boot]
-        B --> C[Backup Full Flash & ART Partition]
+    subgraph Phase 1: Hardware & Flash Backup
+        A["Hardware Programmer (CH341A + SOP8 Clip) OR UART"] --> B["Dump 16 MB SPI Flash"]
+        B --> C["Extract & Validate 64 KB ART Partition (0xff0000)"]
     end
 
-    subgraph Phase 2: OpenWrt Source & DTS
-        D[Clone OpenWrt Source] --> E[Write Device Tree .dts]
-        E --> F[Register Board in ath79 Target]
+    subgraph Phase 2: OpenWrt Source & DTS [COMPLETED]
+        D["Clone OpenWrt 23.05"] --> E["Write Device Tree .dts (qca9531)"]
+        E --> F["Register Board in ath79 Target"]
     end
 
-    subgraph Phase 3: Zero-Risk RAM Boot
-        G[Compile initramfs-kernel.bin] --> H[Setup TFTP Server]
-        H --> I[Boot OpenWrt from RAM via U-Boot]
+    subgraph Phase 3: Firmware Image Compilation [COMPLETED]
+        G["Compile initramfs-kernel.bin"]
+        G --> H["Compile squashfs-sysupgrade.bin"]
+        H --> I["Wrap Transition Image (openwrt-tenda_w15e-v2-transition.bin)"]
     end
 
-    subgraph Phase 4: Bring-Up & Validation
-        I --> J[Verify LAN/WAN Switch Ports]
-        J --> K[Verify 2.4GHz & 5GHz Radios]
-        K --> L[Map Status LEDs & Reset Button GPIOs]
+    subgraph Phase 4: Flashing Paths
+        I --> J1["Path A: 2-Stage Web Upgrade (No Soldering)"]
+        I --> J2["Path B: Direct UART / TFTP Boot"]
+        I --> J3["Path C: Direct Hardware Flash (CH341A)"]
     end
 
-    subgraph Phase 5: Permanent Flashing
-        L --> M[Build Sysupgrade/Factory Image]
-        M --> N[Flash to SPI NOR Flash]
+    subgraph Phase 5: Hardware Bring-Up & Validation
+        J1 --> K["Verify LAN/WAN Switch Ports (qca_shival)"]
+        J2 --> K
+        J3 --> K
+        K --> L["Verify 2.4GHz (ath9k) & 5GHz (ath10k) Radios"]
+        L --> M["Verify Status LEDs & Reset Button GPIOs"]
     end
 
     Phase 1 --> Phase 2 --> Phase 3 --> Phase 4 --> Phase 5
@@ -41,43 +45,37 @@ flowchart TD
 
 ## Phase 1: Hardware Setup & Critical Backups
 
-### 1.1 Connect UART Serial Console
-* **Pinout**: Locate the 4-pin unpopulated UART header on the PCB (`VCC (3.3V)`, `GND`, `TX`, `RX`).
+### 1.1 Non-Invasive Hardware Backup (CH341A + SOP8 Clip)
+If you have a **CH341A programmer + SOP8 test clip**:
+1. Keep the router **powered OFF and unplugged**.
+2. Connect the SOP8 test clip to the 16 MB SPI flash chip (Winbond W25Q128 / GD25Q128) on the board (Pin 1 red wire matching the chip dot/notch).
+3. Connect the CH341A USB adapter to your PC.
+4. Read the flash twice and confirm matching MD5 hashes:
+   ```bash
+   flashrom -p ch341a_spi -r backup1.bin
+   flashrom -p ch341a_spi -r backup2.bin
+   diff backup1.bin backup2.bin
+   ```
+5. Extract the Atheros Radio Test (ART) calibration partition:
+   ```bash
+   python3 scripts/dump_art_extractor.py backup1.bin art_factory.bin
+   ```
+
+### 1.2 Alternative: Connect UART Serial Console
+* **Pinout**: Locate the 4-pin unpopulated UART header labeled `J1` on the PCB (`VCC 3.3V`, `GND`, `TX`, `RX`).
   > [!WARNING]
   > **Do NOT connect the 3.3V VCC pin** to your USB-to-UART adapter. Connect only **GND**, **TX**, and **RX** to prevent electrical conflicts.
-* **Serial Parameters**:
-  * Baud rate: `115200`
-  * Data bits: `8`, Parity: `None`, Stop bits: `1`, Flow control: `None`
-* Verify you can see U-Boot output and interrupt the autoboot countdown by pressing any key.
-
-### 1.2 Back Up Full Flash & `art` Partition
-Before writing anything to the flash, you **must preserve the Atheros Radio Test (ART) partition** located at the end of the 16 MB flash (`0xff0000`–`0x1000000`). If lost, wireless calibration is permanently destroyed.
-* In U-Boot:
-  ```text
-  # Read full 16MB SPI flash into RAM
-  sf probe
-  sf read 0x81000000 0x0 0x1000000
-
-  # Send to your TFTP server
-  tftpput 0x81000000 0x1000000 full_flash_backup.bin
-  ```
+* **Serial Parameters**: `115200 8N1`, No flow control.
 
 ---
 
-## Phase 2: OpenWrt Build Environment & Device Tree
+## Phase 2: OpenWrt Build Environment & Device Tree [Status: DONE]
 
-### 2.1 Clone OpenWrt Source Tree
-```bash
-git clone -b openwrt-23.05 https://github.com/openwrt/openwrt.git
-cd openwrt
-./scripts/feeds update -a
-./scripts/feeds install -a
-```
-
-### 2.2 Define the Device Tree (`.dts`)
-Create `target/linux/ath79/dts/qca9531_tenda_w15e-v2.dts`:
+### 2.1 Device Tree Specification (`dts/qca9531_tenda_w15e-v2.dts`)
+The working Device Tree has been defined and tested:
 
 ```dts
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /dts-v1/;
 
 #include "qca953x.dtsi"
@@ -85,175 +83,176 @@ Create `target/linux/ath79/dts/qca9531_tenda_w15e-v2.dts`:
 #include <dt-bindings/input/input.h>
 
 / {
-    compatible = "tenda,w15e-v2", "qca,qca9531";
-    model = "Tenda W15E v2.0";
+	compatible = "tenda,w15e-v2", "qca,qca9531";
+	model = "Tenda W15E v2.0";
 
-    aliases {
-        led-boot = &led_sys;
-        led-failsafe = &led_sys;
-        led-running = &led_sys;
-    };
+	aliases {
+		led-boot = &led_sys;
+		led-failsafe = &led_sys;
+		led-running = &led_sys;
+		led-upgrade = &led_sys;
+		label-mac-device = &eth0;
+	};
 
-    keys {
-        compatible = "gpio-keys";
+	keys {
+		compatible = "gpio-keys";
 
-        reset {
-            label = "reset";
-            linux,code = <KEY_RESTART>;
-            gpios = <&gpio 17 GPIO_ACTIVE_LOW>;
-            debounce-interval = <60>;
-        };
-    };
+		reset {
+			label = "reset";
+			linux,code = <KEY_RESTART>;
+			gpios = <&gpio 17 GPIO_ACTIVE_LOW>;
+			debounce-interval = <60>;
+		};
+	};
 
-    leds {
-        compatible = "gpio-leds";
+	leds {
+		compatible = "gpio-leds";
 
-        led_sys: sys {
-            label = "green:sys";
-            gpios = <&gpio 1 GPIO_ACTIVE_LOW>;
-            default-state = "on";
-        };
-    };
+		led_sys: sys {
+			label = "green:sys";
+			gpios = <&gpio 1 GPIO_ACTIVE_LOW>;
+			default-state = "on";
+		};
+
+		wlan2g {
+			label = "green:wlan2g";
+			gpios = <&gpio 12 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "phy0tpt";
+		};
+
+		wlan5g {
+			label = "green:wlan5g";
+			gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "phy1tpt";
+		};
+
+		wan {
+			label = "green:wan";
+			gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
+		};
+	};
 };
 
 &spi {
-    status = "okay";
+	status = "okay";
 
-    flash@0 {
-        compatible = "jedec,spi-nor";
-        reg = <0>;
-        spi-max-frequency = <25000000>;
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <25000000>;
 
-        partitions {
-            compatible = "fixed-partitions";
-            #address-cells = <1>;
-            #size-cells = <1>;
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
 
-            partition@0 {
-                label = "u-boot";
-                reg = <0x000000 0x040000>; /* 256 KB */
-                read-only;
-            };
+			partition@0 {
+				label = "u-boot";
+				reg = <0x000000 0x040000>;
+				read-only;
+			};
 
-            partition@40000 {
-                label = "firmware";
-                reg = <0x040000 0xfb0000>; /* ~15.68 MB */
-                compatible = "denx,uimage";
-            };
+			partition@40000 {
+				label = "firmware";
+				reg = <0x040000 0xfb0000>;
+				compatible = "denx,uimage";
+			};
 
-            art: partition@ff0000 {
-                label = "art";
-                reg = <0xff0000 0x010000>; /* 64 KB */
-                read-only;
-            };
-        };
-    };
+			art: partition@ff0000 {
+				label = "art";
+				reg = <0xff0000 0x010000>;
+				read-only;
+			};
+		};
+	};
 };
 
 &eth0 {
-    status = "okay";
-    phy-handle = <&phy0>;
-    phy-mode = "mii";
+	status = "okay";
+	phy-handle = <&swphy4>;
+
+	nvmem-cells = <&macaddr_art_0>;
+	nvmem-cell-names = "mac-address";
+};
+
+&eth1 {
+	status = "okay";
+	phy-handle = <&swphy0>;
+
+	nvmem-cells = <&macaddr_art_0>;
+	nvmem-cell-names = "mac-address";
+	mac-address-increment = <1>;
 };
 
 &wmac {
-    status = "okay";
-    mtd-cal-data = <&art 0x1000>;
+	status = "okay";
+	mtd-cal-data = <&art 0x1000>;
+
+	nvmem-cells = <&macaddr_art_0>;
+	nvmem-cell-names = "mac-address";
 };
 
-&pcie {
-    status = "okay";
+&pcie0 {
+	status = "okay";
 
-    wifi@0,0 {
-        compatible = "qcom,ath10k";
-        reg = <0x0000 0 0 0 0>;
-        mtd-cal-data = <&art 0x5000>;
-    };
+	wifi@0,0 {
+		compatible = "qcom,ath10k";
+		reg = <0 0 0 0 0>;
+		mtd-cal-data = <&art 0x5000>;
+		device_type = "pci";
+
+		nvmem-cells = <&macaddr_art_0>;
+		nvmem-cell-names = "mac-address";
+		mac-address-increment = <2>;
+	};
 };
-```
 
-### 2.3 Register Board in Target Makefile
-Edit `target/linux/ath79/image/generic.mk`:
+&art {
+	compatible = "nvmem-cells";
+	#address-cells = <1>;
+	#size-cells = <1>;
 
-```makefile
-define Device/tenda_w15e-v2
-  SOC := qca9531
-  DEVICE_VENDOR := Tenda
-  DEVICE_MODEL := W15E
-  DEVICE_VARIANT := v2
-  DEVICE_PACKAGES := kmod-ath10k ath10k-firmware-qca9887 kmod-usb-core
-  IMAGE_SIZE := 16064k
-  SUPPORTED_DEVICES += tenda,w15e-v2
-endef
-TARGET_DEVICES += tenda_w15e-v2
+	macaddr_art_0: macaddr@0 {
+		reg = <0x0 0x6>;
+	};
+};
 ```
 
 ---
 
-## Phase 3: Zero-Risk RAM Boot (`initramfs`)
+## Phase 3: Firmware Compilation & Output Artifacts [Status: DONE]
 
-To verify the build without flashing or risking a brick:
+The images were built cleanly inside the Docker build container (`scripts/docker_build.sh`):
 
-### 3.1 Build `initramfs` Image
-```bash
-make menuconfig
-# Select:
-# Target System: Atheros ATH79
-# Subtarget: Generic devices with MIPS 24Kc
-# Target Profile: Tenda W15E v2
-# Target Images -> [*] ramdisk (initramfs)
+* `bin/openwrt-tenda_w15e-v2-transition.bin` (5.96 MB) — **Stage 1 Transition Web Image**
+* `bin/openwrt-ath79-generic-tenda_w15e-v2-squashfs-sysupgrade.bin` (6.1 MB) — **Stage 2 Final Flash Image**
+* `bin/openwrt-ath79-generic-tenda_w15e-v2-initramfs-kernel.bin` (5.7 MB) — **Direct TFTP RAM Test Image**
 
-make -j$(nproc)
-```
-Output artifact: `bin/targets/ath79/generic/openwrt-ath79-generic-tenda_w15e-v2-initramfs-kernel.bin`
+---
 
-### 3.2 Boot over TFTP in U-Boot
-1. Place the `initramfs-kernel.bin` into your local TFTP server directory.
-2. In U-Boot over UART:
+## Phase 4: Flashing Paths
+
+### Option A: The 2-Stage Web Interface Transition (Recommended)
+1. **Stage 1**: Navigate to Tenda Web UI (`192.168.0.1`) $\rightarrow$ **Administration / Firmware Upgrade** $\rightarrow$ **Local Upgrade**. Upload `openwrt-tenda_w15e-v2-transition.bin`.
+2. Router boots OpenWrt entirely in RAM at `192.168.1.1`.
+3. **Stage 2**: Navigate to OpenWrt LuCI (`192.168.1.1`) $\rightarrow$ **System** $\rightarrow$ **Backup / Flash Firmware**. Upload `openwrt-ath79-generic-tenda_w15e-v2-squashfs-sysupgrade.bin` (uncheck "Keep settings").
+4. Router writes flash and reboots into permanent OpenWrt!
+
+### Option B: Zero-Flash RAM Boot via U-Boot TFTP
+1. Host `openwrt-ath79-generic-tenda_w15e-v2-initramfs-kernel.bin` on a local TFTP server (`192.168.0.100`).
+2. In U-Boot serial console:
    ```text
    setenv ipaddr 192.168.0.1
    setenv serverip 192.168.0.100
    tftpboot 0x80060000 openwrt-ath79-generic-tenda_w15e-v2-initramfs-kernel.bin
    bootm 0x80060000
    ```
-3. OpenWrt will unpack directly into DDR RAM. The onboard flash remains 100% untouched.
 
 ---
 
-## Phase 4: Hardware Validation
+## Phase 5: Hardware Bring-Up & Validation
 
-Once the system boots into the OpenWrt console over serial:
-
-1. **Verify Network Interfaces & Switch:**
-   * Test each physical Ethernet port by plugging in a cable:
-     ```bash
-     ip link show
-     logread -e "link up"
-     ```
-   * Confirm WAN vs LAN port mapping.
-2. **Verify 2.4 GHz & 5 GHz Wi-Fi:**
-   * Check wireless interfaces:
-     ```bash
-     iw dev
-     iw phy
-     ```
-   * Ensure `ath9k` and `ath10k` successfully read calibration data without errors.
-3. **Trace GPIOs for LEDs & Buttons:**
-   * Read button state via `cat /sys/kernel/debug/gpio`.
-   * Toggle GPIOs to find exact pin assignments for the system, Wi-Fi, and WAN LEDs.
-   * Update the `.dts` file with confirmed GPIO numbers.
-
----
-
-## Phase 5: Permanent Flashing
-
-1. Build the production sysupgrade image:
-   ```bash
-   make -j$(nproc)
-   ```
-   Artifact: `openwrt-ath79-generic-tenda_w15e-v2-squashfs-sysupgrade.bin`
-2. Flash from the running `initramfs` RAM session:
-   ```bash
-   sysupgrade -n /tmp/openwrt-ath79-generic-tenda_w15e-v2-squashfs-sysupgrade.bin
-   ```
-3. Reboot and access OpenWrt LuCI web interface at `http://192.168.1.1`.
+Once OpenWrt boots:
+1. **Ethernet Switch**: Verify all 5 physical ports toggle link up/down (`ip link show`, `logread -e "link"`).
+2. **Wi-Fi Radios**: Confirm `ath9k` (2.4 GHz) and `ath10k` (5 GHz) start with proper MAC and calibration (`iw phy`, `iw dev`).
+3. **LEDs & Buttons**: Verify the system LED, Wi-Fi LEDs, and reset button behavior.
