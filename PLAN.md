@@ -224,9 +224,10 @@ The working Device Tree has been defined and tested:
 
 The images were built cleanly inside the Docker build container (`scripts/docker_build.sh`):
 
-* `bin/openwrt-tenda_w15e-v2-transition.bin` (5.96 MB) — **Stage 1 Transition Web Image**
-* `bin/openwrt-ath79-generic-tenda_w15e-v2-squashfs-sysupgrade.bin` (6.1 MB) — **Stage 2 Final Flash Image**
-* `bin/openwrt-ath79-generic-tenda_w15e-v2-initramfs-kernel.bin` (5.7 MB) — **Direct TFTP RAM Test Image**
+* `bin/openwrt-tenda_w15e-v2-transition.bin` (6.0 MB) — **Stage 1 Transition Web Image**
+* `bin/openwrt-ath79-generic-tenda_w15e-v2-squashfs-sysupgrade.bin` (6.3 MB) — **Stage 2 Final Flash Image**
+* `bin/openwrt-ath79-generic-tenda_w15e-v2-initramfs-kernel.bin` (6.0 MB) — **Direct TFTP RAM Test Image**
+* `bin/openwrt-tenda_w15e-v2-webupgrade.bin` (6.3 MB) — **Tenda Web Header-Wrapped Sysupgrade Image**
 
 ---
 
