@@ -1,0 +1,15 @@
+# OpenWrt build directory
+openwrt-build/
+build_dir/
+staging_dir/
+bin/
+
+# Firmware binaries
+*.bin
+*.trx
+*.tar.gz
+*.iso
+
+# OS files
+.DS_Store
+Thumbs.db
