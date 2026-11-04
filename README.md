@@ -14,7 +14,7 @@ This repository contains all source code, Device Tree configurations, patches, a
 | **RAM** | **128 MB** DDR2 |
 | **Ethernet Switch** | Qualcomm `qca_shival` (5x 10/100 Mbps Fast Ethernet: 1-4 WAN, 1-4 LAN configurable) |
 | **2.4 GHz Wi-Fi** | Integrated in QCA9531 (2x2 MIMO 802.11b/g/n, driven by `ath9k`) |
-| **5 GHz Wi-Fi** | PCIe radio (802.11a/n/ac up to 867 Mbps, driven by `ath10k`) |
+| **5 GHz Wi-Fi** | Qualcomm Atheros **QCA9888** hw 2.0 (PCIe 2x2 802.11ac Wave-2 up to 867 Mbps, driven by `kmod-ath10k-ct` & `ath10k-firmware-qca9888-ct`) |
 | **Calibration** | Stored in 64 KB `art` partition at flash offset `0xff0000` |
 
 ---

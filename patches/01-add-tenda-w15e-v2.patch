@@ -9,7 +9,7 @@
 +  DEVICE_VENDOR := Tenda
 +  DEVICE_MODEL := W15E
 +  DEVICE_VARIANT := v2
-+  DEVICE_PACKAGES := kmod-ath10k ath10k-firmware-qca9887
++  DEVICE_PACKAGES := kmod-ath10k-ct ath10k-firmware-qca9888-ct
 +  IMAGE_SIZE := 16064k
 +  SUPPORTED_DEVICES += tenda,w15e-v2
 +endef

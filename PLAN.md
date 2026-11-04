@@ -34,7 +34,7 @@ flowchart TD
         J1 --> K["Verify LAN/WAN Switch Ports (qca_shival)"]
         J2 --> K
         J3 --> K
-        K --> L["Verify 2.4GHz (ath9k) & 5GHz (ath10k) Radios"]
+        K --> L["Verify 2.4GHz (ath9k) & 5GHz (ath10k-ct QCA9888) Radios"]
         L --> M["Verify Status LEDs & Reset Button GPIOs"]
     end
 
@@ -254,5 +254,5 @@ The images were built cleanly inside the Docker build container (`scripts/docker
 
 Once OpenWrt boots:
 1. **Ethernet Switch**: Verify all 5 physical ports toggle link up/down (`ip link show`, `logread -e "link"`).
-2. **Wi-Fi Radios**: Confirm `ath9k` (2.4 GHz) and `ath10k` (5 GHz) start with proper MAC and calibration (`iw phy`, `iw dev`).
+2. **Wi-Fi Radios**: Confirm `ath9k` (2.4 GHz) and `ath10k` with QCA9888 (5 GHz) start with proper MAC and calibration (`iw phy`, `iw dev`).
 3. **LEDs & Buttons**: Verify the system LED, Wi-Fi LEDs, and reset button behavior.

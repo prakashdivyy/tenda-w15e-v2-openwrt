@@ -57,7 +57,7 @@ define Device/tenda_w15e-v2
   DEVICE_VENDOR := Tenda
   DEVICE_MODEL := W15E
   DEVICE_VARIANT := v2
-  DEVICE_PACKAGES := kmod-ath10k ath10k-firmware-qca9887
+  DEVICE_PACKAGES := kmod-ath10k-ct ath10k-firmware-qca9888-ct
   IMAGE_SIZE := 16064k
   SUPPORTED_DEVICES += tenda,w15e-v2
 endef
@@ -73,8 +73,8 @@ CONFIG_TARGET_ath79_generic=y
 CONFIG_TARGET_ath79_generic_DEVICE_tenda_w15e-v2=y
 CONFIG_TARGET_ROOTFS_INITRAMFS=y
 CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_kmod-ath10k=y
-CONFIG_PACKAGE_ath10k-firmware-qca9887=y
+CONFIG_PACKAGE_kmod-ath10k-ct=y
+CONFIG_PACKAGE_ath10k-firmware-qca9888-ct=y
 CONFIG_PACKAGE_kmod-ath9k=y
 EOF
 
