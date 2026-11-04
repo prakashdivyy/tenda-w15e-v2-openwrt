@@ -86,6 +86,20 @@ make -j"${NPROC}" || make -j1 V=s
 echo "[6/6] Copying compiled firmware binaries to output directory..."
 cp -v bin/targets/ath79/generic/*tenda_w15e-v2* /output/ || cp -v bin/targets/ath79/generic/*.bin /output/
 
+if [ -f /output/openwrt-ath79-generic-tenda_w15e-v2-initramfs-kernel.bin ]; then
+    echo "Creating Stage 1 Transition Image..."
+    python3 /work/scripts/wrap_tenda_firmware.py \
+      /output/openwrt-ath79-generic-tenda_w15e-v2-initramfs-kernel.bin \
+      /output/openwrt-tenda_w15e-v2-transition.bin
+fi
+
+if [ -f /output/openwrt-ath79-generic-tenda_w15e-v2-squashfs-sysupgrade.bin ]; then
+    echo "Creating Webupgrade Sysupgrade Image..."
+    python3 /work/scripts/wrap_tenda_firmware.py \
+      /output/openwrt-ath79-generic-tenda_w15e-v2-squashfs-sysupgrade.bin \
+      /output/openwrt-tenda_w15e-v2-webupgrade.bin
+fi
+
 echo ""
 echo "=========================================================="
 echo " Build Succeeded! Output firmware binaries:"
