@@ -49,8 +49,9 @@ echo "[2/6] Updating and installing feeds..."
 echo "[3/6] Installing Tenda W15E v2.0 Device Tree and profile..."
 cp -v /work/dts/qca9531_tenda_w15e-v2.dts target/linux/ath79/dts/
 
-if ! grep -q "Device/tenda_w15e-v2" target/linux/ath79/image/generic.mk; then
-    cat << "EOF" >> target/linux/ath79/image/generic.mk
+git checkout target/linux/ath79/image/generic.mk 2>/dev/null || true
+
+cat << "EOF" >> target/linux/ath79/image/generic.mk
 
 define Device/tenda_w15e-v2
   SOC := qca9531
@@ -63,20 +64,25 @@ define Device/tenda_w15e-v2
 endef
 TARGET_DEVICES += tenda_w15e-v2
 EOF
-    echo "       Registered Device/tenda_w15e-v2 in generic.mk"
-fi
+echo "       Registered Device/tenda_w15e-v2 in generic.mk"
 
 echo "[4/6] Creating build configuration..."
+rm -f .config
 cat << EOF > .config
 CONFIG_TARGET_ath79=y
 CONFIG_TARGET_ath79_generic=y
 CONFIG_TARGET_ath79_generic_DEVICE_tenda_w15e-v2=y
 CONFIG_TARGET_ROOTFS_INITRAMFS=y
 CONFIG_PACKAGE_luci=y
+# CONFIG_PACKAGE_kmod-ath10k is not set
 CONFIG_PACKAGE_kmod-ath10k-ct=y
+# CONFIG_PACKAGE_ath10k-firmware-qca9887 is not set
 CONFIG_PACKAGE_ath10k-firmware-qca9888-ct=y
 CONFIG_PACKAGE_kmod-ath9k=y
 EOF
+
+# Clean any conflicting packages in rootfs staging dir from previous runs
+rm -rf build_dir/target-mips_24kc_musl/root-ath79 staging_dir/target-mips_24kc_musl/root-ath79
 
 make defconfig
 
